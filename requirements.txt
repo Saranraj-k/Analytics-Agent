@@ -1,0 +1,16 @@
+# Core
+langchain>=0.2.14
+langchain-experimental>=0.0.64
+langchain-core>=0.2.35
+langchain-community>=0.2.10
+langchain-groq>=0.1.9
+groq>=0.11.0
+pandas>=2.2.2
+numpy>=1.26.4
+
+# Web
+Flask>=3.0.3
+python-dotenv>=1.0.1
+
+# Optional for plotting if you extend later
+matplotlib>=3.8.4

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataFrame Agent · Groq</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand">
+        <img src="images.png" alt="Logo" class="logo" />
+        <div>
+          <h1>Data Analytics Agent</h1>
+          <p class="tagline">Upload CSV • Paste Groq key • Chat & visualize</p>
+        </div>
+      </div>
+
+      <form id="setup-form" class="setup-form" autocomplete="off" onsubmit="return false;">
+        <div class="form-row">
+          <label class="sr-only" for="groq_api_key">Groq API Key</label>
+          <input type="password" id="groq_api_key" name="groq_api_key" placeholder="Groq API Key (gsk_...)" required />
+
+          <label class="sr-only" for="model">Model</label>
+          <select id="model" name="model" aria-label="Model selector">
+            <option value="llama-3-3-70b-instruct" selected>llama-3-3-70b-instruct</option>
+            <option value="Gemma2-9b-It">Gemma2-9b-It</option>
+          </select>
+
+          <label class="sr-only" for="csv_file">CSV File</label>
+          <input type="file" id="csv_file" name="csv_file" accept=".csv" />
+
+          <button id="init-btn" class="primary small" type="button">Initialize Agent</button>
+        </div>
+        <div id="setup-status" class="setup-status" aria-live="polite"></div>
+      </form>
+    </header>
+
+    <main class="main">
+      <aside class="info-panel">
+        <h3>Quick tips</h3>
+        <ul>
+          <li>Upload a CSV (max 20 MB) and initialize the agent.</li>
+          <li>Ask for analysis or plots (e.g., <code>Plot value counts of target column</code>).</li>
+          <li>Your Groq API key is kept in memory for the session only.</li>
+        </ul>
+        <hr/>
+        <h4>Example prompts</h4>
+        <ol>
+          <li>What columns are present and their datatypes?</li>
+          <li>Show a bar chart of value counts for the <code>target</code> column.</li>
+          <li>Plot histogram for <code>mean radius</code> and show summary statistics.</li>
+        </ol>
+      </aside>
+
+      <section class="chat-area">
+        <div id="chat-window" class="chat-window" role="log" aria-live="polite"></div>
+
+        <div class="chat-controls">
+          <input type="text" id="user-message" placeholder="Ask a question about your data or request a plot..." autocomplete="off" disabled />
+          <button id="send-btn" class="primary" disabled>Send</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <small>Built with LangChain + Groq • Keys are session-only. • <em>For portfolio use</em></small>
+    </footer>
+  </div>
+
+  <script>
+    // ----- UI elements -----
+    const setupForm = document.getElementById('setup-form');
+    const statusEl = document.getElementById('setup-status');
+    const chatWindow = document.getElementById('chat-window');
+    const userInput = document.getElementById('user-message');
+    const sendBtn = document.getElementById('send-btn');
+    const initBtn = document.getElementById('init-btn');
+    const csvFileInput = document.getElementById('csv_file');
+
+    // Helper: format timestamp
+    function _ts(){ const d=new Date(); return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}); }
+
+    // Append message with avatar and optional image
+    function appendMessage(role, text, imageUrl=null) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'chat-row ' + role;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar ' + role;
+      avatar.innerText = role === 'user' ? 'U' : 'A';
+
+      const body = document.createElement('div');
+      body.className = 'bubble';
+      if (text) {
+        const p = document.createElement('div');
+        p.className = 'bubble-text';
+        p.innerText = text;
+        body.appendChild(p);
+      }
+
+      if (imageUrl) {
+        const imgWrap = document.createElement('div');
+        imgWrap.className = 'bubble-image';
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.alt = 'Chart';
+        img.loading = 'lazy';
+        imgWrap.appendChild(img);
+        body.appendChild(imgWrap);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.innerText = _ts();
+      body.appendChild(meta);
+
+      wrapper.appendChild(avatar);
+      wrapper.appendChild(body);
+      chatWindow.appendChild(wrapper);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    // Enable chat controls after successful setup
+    function enableChatControls() {
+      userInput.disabled = false;
+      sendBtn.disabled = false;
+      userInput.focus();
+    }
+    function disableChatControls() {
+      userInput.disabled = true;
+      sendBtn.disabled = true;
+    }
+
+    // Setup form: initialize agent
+    initBtn.addEventListener('click', async () => {
+      statusEl.textContent = "Initializing...";
+      statusEl.classList.remove('err','ok');
+      disableChatControls();
+
+      const formData = new FormData();
+      formData.append('groq_api_key', document.getElementById('groq_api_key').value);
+      formData.append('model', document.getElementById('model').value);
+      if (csvFileInput.files.length > 0) {
+        formData.append('csv_file', csvFileInput.files[0]);
+      }
+
+      try {
+        const res = await fetch('/setup', { method: 'POST', body: formData });
+        // If server returns non-2xx, try to extract text for clearer error
+        if (!res.ok) {
+          const txt = await res.text().catch(()=>null);
+          throw new Error((txt && txt.length>0) ? txt : `HTTP ${res.status}`);
+        }
+        const data = await res.json().catch(()=>null);
+        if (!data || !data.ok) {
+          throw new Error((data && data.error) ? data.error : 'Setup failed (invalid response)');
+        }
+        statusEl.textContent = "Agent ready — you can ask questions now.";
+        statusEl.classList.add('ok');
+        enableChatControls();
+      } catch (err) {
+        console.error("Setup error:", err);
+        statusEl.textContent = "Error: " + (err.message || err);
+        statusEl.classList.add('err');
+        disableChatControls();
+      }
+    });
+
+    // Robust fetch wrapper for /chat that surfaces helpful diagnostics
+    async function postChat(message) {
+      try {
+        const res = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message }),
+        });
+
+        // If non-2xx, try to show server text to help debugging
+        if (!res.ok) {
+          const txt = await res.text().catch(()=>null);
+          throw new Error((txt && txt.length>0) ? txt : `HTTP ${res.status}`);
+        }
+
+        // Attempt JSON parse; fall back to text if parsing fails
+        const text = await res.text();
+        try {
+          const json = JSON.parse(text);
+          return json;
+        } catch (parseErr) {
+          // server returned non-JSON but 200; return textual response
+          return { ok: true, answer: text };
+        }
+      } catch (networkErr) {
+        // This is where "Failed to fetch" shows up in practice
+        console.error("Network/fetch error:", networkErr);
+        // Try to give a hint to user
+        return { ok: false, error: networkErr.message || String(networkErr) };
+      }
+    }
+
+    // Send chat message
+    async function sendMessage() {
+      const text = userInput.value.trim();
+      if (!text) return;
+      appendMessage('user', text);
+      userInput.value = '';
+      // assistant thinking bubble
+      appendMessage('assistant', '…thinking');
+
+      // Call /chat with robust error handling
+      const data = await postChat(text);
+
+      // Remove the last 'thinking' assistant bubble
+      const last = chatWindow.lastElementChild;
+      if (last && last.querySelector('.bubble-text') && last.querySelector('.bubble-text').innerText === '…thinking') {
+        chatWindow.removeChild(last);
+      }
+
+      if (!data.ok) {
+        // show server error details if present
+        appendMessage('assistant', 'Error: ' + (data.error || 'Unknown error'), data.image_url || null);
+      } else {
+        appendMessage('assistant', data.answer || '(no answer)', data.image_url || null);
+      }
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    // Keep chat disabled until setup completes
+    disableChatControls();
+  </script>
+</body>
+</html>
