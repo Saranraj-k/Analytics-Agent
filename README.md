@@ -21,11 +21,10 @@ This README explains what the project does, which tools it uses, how it helps yo
 * [Usage — UI walkthrough](#usage--ui-walkthrough)
 * [Example prompts](#example-prompts)
 * [How plotting works (internals)](#how-plotting-works-internals)
-* [Screenshots (add yours)](#screenshots-add-yours) 🖼️
 * [Extending the app](#extending-the-app)
 * [Security & limitations](#security--limitations) 🔒
 * [Troubleshooting](#troubleshooting)
-* [License & contribution](#license--contribution)
+
 
 ---
 
@@ -67,7 +66,7 @@ This README explains what the project does, which tools it uses, how it helps yo
 # Project structure
 
 ```
-ai-data-agent/
+Analytics-Agent/
 ├─ app/
 │  ├─ main.py                # Flask entrypoint (self-starting)
 │  ├─ modules/
